@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Path where all your repos are stored
+BASE_DIR="$HOME/projects"   # <-- change this to your folder containing repos
+
+# Workflow content
+WORKFLOW_FILE=".github/workflows/universal-nodejs.yml"
+WORKFLOW_CONTENT='name: Universal Node.js CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Detect package manager and install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "npm detected"
+            npm ci
+          elif [ -f yarn.lock ]; then
+            echo "Yarn detected"
+            yarn install --immutable
+          else
+            echo "No lock file found! Please add package-lock.json or yarn.lock"
+            exit 1
+          fi
+
+      - name: Run tests
+        run: |
+          if npm test >/dev/null 2>&1; then
+            npm test
+          elif yarn test >/dev/null 2>&1; then
+            yarn test
+          else
+            echo "No test script found"
+          fi
+
+      - name: Build project
+        run: |
+          if npm run build >/dev/null 2>&1; then
+            npm run build
+          elif yarn build >/dev/null 2>&1; then
+            yarn build
+          else
+            echo "No build script found"
+          fi
+'
+
+# Loop through all repos in BASE_DIR
+for repo in "$BASE_DIR"/*; do
+  if [ -d "$repo" ] && [ -f "$repo/package.json" ]; then
+    echo "Adding workflow to $repo"
+
+    mkdir -p "$repo/.github/workflows"
+    echo "$WORKFLOW_CONTENT" > "$repo/$WORKFLOW_FILE"
+
+    cd "$repo"
+    git add "$WORKFLOW_FILE"
+    git commit -m "Add universal Node.js GitHub Actions workflow"
+    git push
+    echo "Workflow added and pushed for $repo"
+  else
+    echo "Skipping $repo (not a Node.js repo)"
+  fi
+done
+
+echo "All done!"
